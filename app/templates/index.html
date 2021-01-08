@@ -1,7 +1,18 @@
 <html>
    <body>
+    {% with message = get_flashed_messages() %}
+        {% if message %}
+            <ul class=flashes>
+            {% for message in message %}
+                <li>{{message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
       <form action="http://localhost:5000/" method = "POST" enctype="multipart/form-data">
-         <input type="file" name="file" />
+          <input type="file" name="file" /><br>
+          <input type="text" name="headline" /><br>
+          <input type="text" name="synopsis" /><br>
          <input type="submit"/>
       </form>
       {% if filename %}
