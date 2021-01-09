@@ -8,5 +8,5 @@ Session.vim
 *.idea
 .coverage
 build
-app/static/uploads/+.*
+app/static/uploads/?*.*
 Pipfile.lock
