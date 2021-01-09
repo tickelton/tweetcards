@@ -26,10 +26,22 @@ from app import app
 # print('DEBUG OUTPUT', file=sys.stderr)
 
 
+TWEETCARD_WIDTH = 570
+TWEETCARD_HEIGHT = 125
+IMAGE_BODY_WIDTH = TWEETCARD_WIDTH - 2
+IMAGE_BODY_HEIGHT = TWEETCARD_HEIGHT - 2
+IMAGE_BODY_BG = 'white'
 MAX_CHARS_HEADLINE = 43
 MAX_CHARS_SYNOPSIS = 60
-THUMB_IMAGE_WIDTH = 123
-THUMB_IMAGE_HEIGHT = 123
+THUMB_IMAGE_WIDTH = IMAGE_BODY_HEIGHT
+THUMB_IMAGE_HEIGHT = IMAGE_BODY_HEIGHT
+TEXT_X_OFFSET = 180
+HEADLINE_Y_OFFSET = 30
+SYNOPSIS_Y_OFFSET = 70
+FONT_SIZE_SYNOPSIS = 15
+FONT_PATH = '/usr/share/fonts/truetype/freefont/FreeSans.ttf'
+FONT_SIZE_HEADLINE = 18
+FONT_BOLD_PATH = '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf'
 VALID_IMAGE_EXTENSIONS  = {'jpg', 'jpeg', 'gif', 'png'}
 
 def is_image_type(filename):
@@ -76,6 +88,27 @@ def create_thumb_image(image_path):
 
     return im_resized
 
+def create_image_text(image_thumb, headline, synopsis):
+    ''' creates image with headline and synopsis '''
+
+    # create base image
+    image_text = Image.new('RGBA', (IMAGE_BODY_WIDTH, IMAGE_BODY_HEIGHT), IMAGE_BODY_BG)
+    d = ImageDraw.Draw(image_text)
+
+    # draw headline
+    font_headline = ImageFont.truetype(FONT_BOLD_PATH, FONT_SIZE_HEADLINE)
+    d.text((TEXT_X_OFFSET, HEADLINE_Y_OFFSET), headline, fill=(0, 0, 0), font=font_headline)
+
+    # draw synopsis
+    font_synopsis = ImageFont.truetype(FONT_PATH, FONT_SIZE_SYNOPSIS)
+    d.text((TEXT_X_OFFSET, SYNOPSIS_Y_OFFSET), synopsis, fill=(0, 0, 0), font=font_synopsis)
+
+    # paste thumbnail onto text image
+    image_text.paste(image_thumb, (0, 0))
+
+    return image_text
+
+
 
 @app.route('/')
 @app.route('/index')
@@ -121,38 +154,32 @@ def display_image():
             tempdir.cleanup()
             return redirect(request.url)
 
-        img = Image.new('RGBA', (568, 123), 'white')
-        d = ImageDraw.Draw(img)
-        font_headline = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeSansBold.ttf', 18)
-        d.text((180, 30), headline, fill=(0, 0, 0), font=font_headline)
-        font_synopsis = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeSans.ttf', 15)
-        d.text((180, 70), synopsis, fill=(0, 0, 0), font=font_synopsis)
-        img.paste(image_thumb, (0, 0))
+        image_text = create_image_text(image_thumb, headline, synopsis)
 
         outer_corner = Image.new("L", (11,11), 0)
         draw_outer_corner = ImageDraw.Draw(outer_corner)
-        draw_outer_corner.pieslice((0,0, 22, 22), 180, 270, 'white')
+        draw_outer_corner.pieslice((0,0, 22, 22), 180, 270, IMAGE_BODY_BG)
         inner_corner = Image.new("L", (11,11), 0)
         draw_inner_corner = ImageDraw.Draw(inner_corner)
-        draw_inner_corner.pieslice((0,0, 23, 23), 180, 270, 'white')
-        mask_im_outer = Image.new("L", (570,125), 'white')
+        draw_inner_corner.pieslice((0,0, 23, 23), 180, 270, IMAGE_BODY_BG)
+        mask_im_outer = Image.new("L", (TWEETCARD_WIDTH,TWEETCARD_HEIGHT), IMAGE_BODY_BG)
         mask_im_outer.paste(outer_corner, (0,0))
-        mask_im_outer.paste(outer_corner.rotate(90), (0, 125-11))
-        mask_im_outer.paste(outer_corner.rotate(180), (570-11, 125-11))
-        mask_im_outer.paste(outer_corner.rotate(270), (570-11, 0))
+        mask_im_outer.paste(outer_corner.rotate(90), (0, TWEETCARD_HEIGHT-11))
+        mask_im_outer.paste(outer_corner.rotate(180), (TWEETCARD_WIDTH-11, TWEETCARD_HEIGHT-11))
+        mask_im_outer.paste(outer_corner.rotate(270), (TWEETCARD_WIDTH-11, 0))
 
-        mask_im_inner = Image.new("L", (568,123), 'white')
+        mask_im_inner = Image.new("L", (IMAGE_BODY_WIDTH,IMAGE_BODY_HEIGHT), IMAGE_BODY_BG)
         mask_im_inner.paste(inner_corner, (0,0))
-        mask_im_inner.paste(inner_corner.rotate(90), (0, 123-11))
-        mask_im_inner.paste(inner_corner.rotate(180), (568-11, 123-11))
-        mask_im_inner.paste(inner_corner.rotate(270), (568-11, 0))
+        mask_im_inner.paste(inner_corner.rotate(90), (0, IMAGE_BODY_HEIGHT-11))
+        mask_im_inner.paste(inner_corner.rotate(180), (IMAGE_BODY_WIDTH-11, IMAGE_BODY_HEIGHT-11))
+        mask_im_inner.paste(inner_corner.rotate(270), (IMAGE_BODY_WIDTH-11, 0))
 
-        target_im = Image.new('RGBA', (570, 125), 'black')
+        target_im = Image.new('RGBA', (TWEETCARD_WIDTH, TWEETCARD_HEIGHT), 'black')
         target_im.putalpha(0)
 
-        border_im = Image.new('RGBA', (570, 125), 'grey')
+        border_im = Image.new('RGBA', (TWEETCARD_WIDTH, TWEETCARD_HEIGHT), 'grey')
         target_im.paste(border_im, (0, 0), mask_im_outer)
-        target_im.paste(img, (1, 1), mask_im_inner)
+        target_im.paste(image_text, (1, 1), mask_im_inner)
 
 
         out_name = save_name_base + '.png'

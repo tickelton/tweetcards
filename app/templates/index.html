@@ -16,7 +16,10 @@
          <input type="submit"/>
       </form>
       {% if filename %}
-         <img src="static/uploads/{{ filename }}" />
+        <img src="static/uploads/{{ filename }}" />
+        <a href="static/uploads/{{ filename }}" download="tweetcard.png">
+            <button type="button">Save</button>
+        </a> 
       {% endif %}
    </body>
 </html>
