@@ -7,24 +7,8 @@ from PIL import Image, ImageDraw, ImageFont
 from flask import render_template, redirect, flash, request
 from app import app
 
-#>>> from PIL import Image
-#>>> im = Image.open('./input.png')
-#>>> im.size
-#(805, 502)
-#>>> outfile = im.resize((100,100))
-#>>> outfile.save('./out.png')
 
-
-#>>> round_corner = Image.new("L", (11,11), 0)
-#>>> draw_corner = ImageDraw.Draw(round_corner)
-#>>> draw_corner.pieslice((0,0, 22, 22), 180, 270, 'white')
-#>>> mask_im1 = Image.new("L", (125,125), 'white')
-#>>> mask_im1.paste(round_corner, (0,0))
-#>>> mask_im1.paste(round_corner.rotate(90), (0, 114))
-#>>> mask_im1.save("mask.png")
-
-# print('DEBUG OUTPUT', file=sys.stderr)
-
+# constants
 
 TWEETCARD_WIDTH = 570
 TWEETCARD_HEIGHT = 125
@@ -42,7 +26,11 @@ FONT_SIZE_SYNOPSIS = 15
 FONT_PATH = '/usr/share/fonts/truetype/freefont/FreeSans.ttf'
 FONT_SIZE_HEADLINE = 18
 FONT_BOLD_PATH = '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf'
+CORNER_RADIUS = 11
 VALID_IMAGE_EXTENSIONS  = {'jpg', 'jpeg', 'gif', 'png'}
+
+
+# functions
 
 def is_image_type(filename):
     ''' Checks if file name has a valid extension '''
@@ -89,7 +77,7 @@ def create_thumb_image(image_path):
     return im_resized
 
 def create_image_text(image_thumb, headline, synopsis):
-    ''' creates image with headline and synopsis '''
+    ''' Creates image with headline and synopsis '''
 
     # create base image
     image_text = Image.new('RGBA', (IMAGE_BODY_WIDTH, IMAGE_BODY_HEIGHT), IMAGE_BODY_BG)
@@ -108,7 +96,75 @@ def create_image_text(image_thumb, headline, synopsis):
 
     return image_text
 
+def create_mask_images():
+    ''' Creates masks for rounded corners '''
 
+    # create pie slice for outer corners
+    outer_corner = Image.new("L", (CORNER_RADIUS, CORNER_RADIUS), 0)
+    draw_outer_corner = ImageDraw.Draw(outer_corner)
+    draw_outer_corner.pieslice(
+        (
+            0,
+            0,
+            CORNER_RADIUS*2,
+            CORNER_RADIUS*2
+        ),
+        180,
+        270,
+        IMAGE_BODY_BG
+    )
+
+    # create pie slice for inner corners
+    inner_corner = Image.new("L", (CORNER_RADIUS, CORNER_RADIUS), 0)
+    draw_inner_corner = ImageDraw.Draw(inner_corner)
+    draw_inner_corner.pieslice(
+        (
+            0,
+            0,
+            (CORNER_RADIUS*2)+1,
+            (CORNER_RADIUS*2)+1
+        ),
+        180,
+        270,
+        IMAGE_BODY_BG
+    )
+
+    # create mask imager for outer corners
+    mask_im_outer = Image.new("L", (TWEETCARD_WIDTH,TWEETCARD_HEIGHT), IMAGE_BODY_BG)
+    mask_im_outer.paste(outer_corner, (0,0))
+    mask_im_outer.paste(
+        outer_corner.rotate(90),
+        (0, TWEETCARD_HEIGHT-CORNER_RADIUS)
+    )
+    mask_im_outer.paste(
+        outer_corner.rotate(180),
+        (TWEETCARD_WIDTH-CORNER_RADIUS, TWEETCARD_HEIGHT-CORNER_RADIUS)
+    )
+    mask_im_outer.paste(
+        outer_corner.rotate(270),
+        (TWEETCARD_WIDTH-CORNER_RADIUS, 0)
+    )
+
+    # create mask image for inner corners
+    mask_im_inner = Image.new("L", (IMAGE_BODY_WIDTH,IMAGE_BODY_HEIGHT), IMAGE_BODY_BG)
+    mask_im_inner.paste(inner_corner, (0,0))
+    mask_im_inner.paste(
+        inner_corner.rotate(90),
+        (0, IMAGE_BODY_HEIGHT-CORNER_RADIUS)
+    )
+    mask_im_inner.paste(
+        inner_corner.rotate(180),
+        (IMAGE_BODY_WIDTH-CORNER_RADIUS, IMAGE_BODY_HEIGHT-CORNER_RADIUS)
+    )
+    mask_im_inner.paste(
+        inner_corner.rotate(270),
+        (IMAGE_BODY_WIDTH-CORNER_RADIUS, 0)
+    )
+
+    return (mask_im_outer, mask_im_inner)
+
+
+# routes
 
 @app.route('/')
 @app.route('/index')
@@ -123,6 +179,8 @@ def upload_form():
 @app.route('/', methods=['POST'])
 @app.route('/index', methods=['POST'])
 def display_image():
+
+    # fetch input file and text from form
     f = request.files['file']
     headline = request.form['headline']
     synopsis = request.form['synopsis']
@@ -131,7 +189,7 @@ def display_image():
         flash('No image file selected')
         return redirect(request.url)
 
-    if not headline or not synopsis:
+    if not headline and not synopsis:
         flash('No text supplied')
         return redirect(request.url)
 
@@ -147,6 +205,7 @@ def display_image():
         save_path = os.path.join(tempdir.name, save_name)
         f.save(save_path)
 
+        # create thumbnail and image text
         try:
             image_thumb = create_thumb_image(save_path)
         except ValueError as e:
@@ -156,32 +215,18 @@ def display_image():
 
         image_text = create_image_text(image_thumb, headline, synopsis)
 
-        outer_corner = Image.new("L", (11,11), 0)
-        draw_outer_corner = ImageDraw.Draw(outer_corner)
-        draw_outer_corner.pieslice((0,0, 22, 22), 180, 270, IMAGE_BODY_BG)
-        inner_corner = Image.new("L", (11,11), 0)
-        draw_inner_corner = ImageDraw.Draw(inner_corner)
-        draw_inner_corner.pieslice((0,0, 23, 23), 180, 270, IMAGE_BODY_BG)
-        mask_im_outer = Image.new("L", (TWEETCARD_WIDTH,TWEETCARD_HEIGHT), IMAGE_BODY_BG)
-        mask_im_outer.paste(outer_corner, (0,0))
-        mask_im_outer.paste(outer_corner.rotate(90), (0, TWEETCARD_HEIGHT-11))
-        mask_im_outer.paste(outer_corner.rotate(180), (TWEETCARD_WIDTH-11, TWEETCARD_HEIGHT-11))
-        mask_im_outer.paste(outer_corner.rotate(270), (TWEETCARD_WIDTH-11, 0))
+        (mask_im_outer, mask_im_inner) = create_mask_images()
 
-        mask_im_inner = Image.new("L", (IMAGE_BODY_WIDTH,IMAGE_BODY_HEIGHT), IMAGE_BODY_BG)
-        mask_im_inner.paste(inner_corner, (0,0))
-        mask_im_inner.paste(inner_corner.rotate(90), (0, IMAGE_BODY_HEIGHT-11))
-        mask_im_inner.paste(inner_corner.rotate(180), (IMAGE_BODY_WIDTH-11, IMAGE_BODY_HEIGHT-11))
-        mask_im_inner.paste(inner_corner.rotate(270), (IMAGE_BODY_WIDTH-11, 0))
-
+        # create transparent background for output image
         target_im = Image.new('RGBA', (TWEETCARD_WIDTH, TWEETCARD_HEIGHT), 'black')
         target_im.putalpha(0)
 
+        # past border and content onto base image
         border_im = Image.new('RGBA', (TWEETCARD_WIDTH, TWEETCARD_HEIGHT), 'grey')
         target_im.paste(border_im, (0, 0), mask_im_outer)
         target_im.paste(image_text, (1, 1), mask_im_inner)
 
-
+        # save output in uploads folder
         out_name = save_name_base + '.png'
         target_im.save(os.path.join(app.config['UPLOAD_DIR'], out_name))
 
