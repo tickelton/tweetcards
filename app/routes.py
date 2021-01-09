@@ -1,6 +1,8 @@
 import os
 import sys
 import uuid
+import logging
+import tempfile
 from PIL import Image, ImageDraw, ImageFont
 from flask import render_template, redirect, flash, request
 from app import app
@@ -24,15 +26,65 @@ from app import app
 # print('DEBUG OUTPUT', file=sys.stderr)
 
 
+MAX_CHARS_HEADLINE = 43
+MAX_CHARS_SYNOPSIS = 60
+THUMB_IMAGE_WIDTH = 123
+THUMB_IMAGE_HEIGHT = 123
 VALID_IMAGE_EXTENSIONS  = {'jpg', 'jpeg', 'gif', 'png'}
+
 def is_image_type(filename):
+    ''' Checks if file name has a valid extension '''
+
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in VALID_IMAGE_EXTENSIONS
+
+def create_thumb_image(image_path):
+    ''' Crops the input image to a square and resizes it '''
+
+    im = Image.open(image_path)
+    (width, height) = im.size
+
+    if width < THUMB_IMAGE_WIDTH or height < THUMB_IMAGE_HEIGHT:
+        raise ValueError(
+            'Minimum image size: {}x{}px (got {}x{})'.format(
+                THUMB_IMAGE_WIDTH,
+                THUMB_IMAGE_HEIGHT,
+                width,
+                height
+            )
+        )
+
+    if width > height:
+        im_square = im.crop(
+                (
+                    (width-height)/2,
+                    0,
+                    width-(width-height)/2,
+                    height
+                )
+        )
+    else:
+        im_square = im.crop(
+                (
+                    0,
+                    (height-width)/2,
+                    width,
+                    height-(height-width)/2,
+                )
+        )
+
+    im_resized = im_square.resize((THUMB_IMAGE_WIDTH, THUMB_IMAGE_HEIGHT))
+
+    return im_resized
 
 
 @app.route('/')
 @app.route('/index')
 def upload_form():
-    return render_template('index.html')
+    return render_template(
+        'index.html',
+        maxlength_headline=MAX_CHARS_HEADLINE,
+        maxlength_synopsis=MAX_CHARS_SYNOPSIS
+    )
 
 
 @app.route('/', methods=['POST'])
@@ -42,54 +94,40 @@ def display_image():
     headline = request.form['headline']
     synopsis = request.form['synopsis']
 
-    print("FORM DATA: %s xx %s", headline, synopsis, file=sys.stderr)
-
     if f.filename == '':
         flash('No image file selected')
         return redirect(request.url)
+
     if not headline or not synopsis:
         flash('No text supplied')
         return redirect(request.url)
+
     if f and is_image_type(f.filename):
+        #app.logger.info("INFO LOG")
+
+        # generate generic name for the uploaded
+        # image and save it in a temporary directory
         extension = f.filename.rsplit('.', 1)[1].lower()
         save_name_base = str(uuid.uuid4().hex)
         save_name = save_name_base + "." + extension
-        save_path = os.path.join(app.config['UPLOAD_DIR'], save_name)
+        tempdir = tempfile.TemporaryDirectory()
+        save_path = os.path.join(tempdir.name, save_name)
         f.save(save_path)
 
-        # TODO: preserve aspect ratio
-        im = Image.open(save_path)
-        (width, height) = im.size
-        if width > height:
-            im_square = im.crop(
-                    (
-                        (width-height)/2,
-                        0,
-                        width-(width-height)/2,
-                        height
-                    )
-            )
-        else:
-            im_square = im.crop(
-                    (
-                        0,
-                        (height-width)/2,
-                        width,
-                        height-(height-width)/2,
-                    )
-            )
-        #im_square.save('/media/ramdisk/square.png')
-        im_resized = im_square.resize((123,123))
-        #im_resized.save(save_path)
+        try:
+            image_thumb = create_thumb_image(save_path)
+        except ValueError as e:
+            flash(str(e))
+            tempdir.cleanup()
+            return redirect(request.url)
 
         img = Image.new('RGBA', (568, 123), 'white')
-        # TODO: check text length
         d = ImageDraw.Draw(img)
         font_headline = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeSansBold.ttf', 18)
         d.text((180, 30), headline, fill=(0, 0, 0), font=font_headline)
         font_synopsis = ImageFont.truetype('/usr/share/fonts/truetype/freefont/FreeSans.ttf', 15)
         d.text((180, 70), synopsis, fill=(0, 0, 0), font=font_synopsis)
-        img.paste(im_resized, (0, 0))
+        img.paste(image_thumb, (0, 0))
 
         outer_corner = Image.new("L", (11,11), 0)
         draw_outer_corner = ImageDraw.Draw(outer_corner)
@@ -120,7 +158,13 @@ def display_image():
         out_name = save_name_base + '.png'
         target_im.save(os.path.join(app.config['UPLOAD_DIR'], out_name))
 
-        return render_template('index.html', filename=out_name)
+        tempdir.cleanup()
+        return render_template(
+            'index.html',
+            filename=out_name,
+            maxlength_headline=MAX_CHARS_HEADLINE,
+            maxlength_synopsis=MAX_CHARS_SYNOPSIS
+        )   
     else:
         flash('Supported image types: {}'.format(VALID_IMAGE_EXTENSIONS))
         return redirect(request.url)

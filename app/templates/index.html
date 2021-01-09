@@ -11,8 +11,8 @@
     {% endwith %}
       <form action="http://localhost:5000/" method = "POST" enctype="multipart/form-data">
           <input type="file" name="file" /><br>
-          <input type="text" name="headline" /><br>
-          <input type="text" name="synopsis" /><br>
+          <input type="text" name="headline" maxlength="{{ maxlength_headline }}"/><br>
+          <input type="text" name="synopsis" maxlength="{{ maxlength_synopsis}}"/><br>
          <input type="submit"/>
       </form>
       {% if filename %}
