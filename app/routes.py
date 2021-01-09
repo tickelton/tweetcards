@@ -1,3 +1,6 @@
+# Copyright (c) 2021 tick <tickelton@gmail.com>
+# SPDX-License-Identifier:	ISC
+
 import os
 import sys
 import uuid
