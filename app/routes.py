@@ -124,8 +124,8 @@ def create_mask_images():
         (
             0,
             0,
-            (CORNER_RADIUS*2)+1,
-            (CORNER_RADIUS*2)+1
+            CORNER_RADIUS*2,
+            CORNER_RADIUS*2
         ),
         180,
         270,
